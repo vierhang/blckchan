@@ -3,8 +3,6 @@ package BLC
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
-	"log"
 	"time"
 )
 
@@ -32,6 +30,7 @@ func NewBlock(height int64, preBlockHash []byte, data []byte) *Block {
 }
 
 // function or method 属于某个实例还是谁都可以用
+
 // SetHash 计算区块哈希
 func (b *Block) SetHash() {
 	// sha256实现哈希生成
@@ -45,12 +44,6 @@ func (b *Block) SetHash() {
 	b.Hash = hash[:]
 }
 
-// IntToHex 实现int64 -> []byte
-func IntToHex(data int64) []byte {
-	buffer := new(bytes.Buffer)
-	err := binary.Write(buffer, binary.BigEndian, data)
-	if err != nil {
-		log.Panicf("int transact to []byte faild %v\n", err)
-	}
-	return buffer.Bytes()
+func CreateGenesisBlock(data []byte) *Block {
+	return NewBlock(1, nil, data)
 }

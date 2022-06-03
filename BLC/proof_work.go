@@ -28,6 +28,7 @@ func NewProofOfWork(block *Block) *ProofOfWork {
 	// 0100 0000
 	// 00xx xxxx      0011 1111 = 63
 	// 32 * 8 = 256
+	// 设置目标难度值（前n位为0就左移256-n位，只要生成的哈希值小于这个2^(256-n)就一定小于目标难度值）
 	target = target.Lsh(target, 256-targetBit)
 	return &ProofOfWork{Block: block, target: target}
 }

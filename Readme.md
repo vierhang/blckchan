@@ -18,4 +18,9 @@
 
 # day4 持久化
 1. https://github.com/boltdb/bolt
-2. 
+2. 定义数据库名和表名
+3. biltdb基本操作（insert、read）
+4. 遍历区块链
+5. 迭代器
+
+# day5 实现命令行

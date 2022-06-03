@@ -1,8 +1,10 @@
 package BLC
 
 import (
+	"fmt"
 	"github.com/boltdb/bolt"
 	"log"
+	"math/big"
 )
 
 // DBName 数据库名称
@@ -86,5 +88,65 @@ func (bc *BlockChain) AddBlock(data []byte) {
 	})
 	if err != nil {
 		log.Panicf("AddBlock error %+v \n", err)
+	}
+}
+
+func (bc *BlockChain) PrintChan() {
+	fmt.Println("打印区块链完整信息")
+	var curBlock *Block
+	bcit := bc.Iterator()
+	for {
+		fmt.Println("______________")
+		curBlock = bcit.Next()
+		fmt.Printf("\tHash %x\n", curBlock.Hash)
+		fmt.Printf("\tPreBlockHash %x\n", curBlock.PreBlockHash)
+		fmt.Printf("\tTimeStamp %v\n", curBlock.TimeStamp)
+		fmt.Printf("\tData %s\n", curBlock.Data)
+		fmt.Printf("\tHeight %d\n", curBlock.Height)
+		fmt.Printf("\tNonce %d\n", curBlock.Nonce)
+		// 退出条件
+		// 创世区块 preHash = nil
+		var hashInt big.Int
+		hashInt.SetBytes(curBlock.PreBlockHash)
+		if big.NewInt(0).Cmp(&hashInt) == 0 {
+			//遍历到创世区块
+			break
+		}
+	}
+}
+
+// PrintChan2 遍历数据库、输出所有区块数据
+func (bc *BlockChain) PrintChan2() {
+	fmt.Println("打印区块链完整信息")
+	var curBlock *Block
+	var currentHash = bc.Tip
+	for {
+		fmt.Println("______________")
+		bc.DB.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte(BlockTableName))
+			if b != nil {
+				blockBytes := b.Get(currentHash)
+				curBlock = DeSerializeBlock(blockBytes)
+				// 输出区块详情
+				fmt.Printf("\tHash %x\n", curBlock.Hash)
+				fmt.Printf("\tPreBlockHash %x\n", curBlock.PreBlockHash)
+				fmt.Printf("\tTimeStamp %v\n", curBlock.TimeStamp)
+				fmt.Printf("\tData %s\n", curBlock.Data)
+				fmt.Printf("\tHeight %d\n", curBlock.Height)
+				fmt.Printf("\tNonce %d\n", curBlock.Nonce)
+				//fmt.Printf("Hash %x\n", curBlock.Hash)
+			}
+			return nil
+		})
+		// 退出条件
+		// 创世区块 preHash = nil
+		var hashInt big.Int
+		hashInt.SetBytes(curBlock.PreBlockHash)
+		if big.NewInt(0).Cmp(&hashInt) == 0 {
+			//遍历到创世区块
+			break
+		}
+		// 更新当前要获取的区块哈希值
+		currentHash = curBlock.PreBlockHash
 	}
 }

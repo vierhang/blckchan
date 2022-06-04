@@ -1,11 +1,13 @@
 package BLC
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/boltdb/bolt"
 	"log"
 	"math/big"
 	"os"
+	"strconv"
 )
 
 // DBName 数据库名称
@@ -120,9 +122,24 @@ func (bc *BlockChain) PrintChan() {
 		fmt.Printf("\tHash %x\n", curBlock.Hash)
 		fmt.Printf("\tPreBlockHash %x\n", curBlock.PreBlockHash)
 		fmt.Printf("\tTimeStamp %v\n", curBlock.TimeStamp)
-		fmt.Printf("\tTxs %s\n", curBlock.Txs)
 		fmt.Printf("\tHeight %d\n", curBlock.Height)
 		fmt.Printf("\tNonce %d\n", curBlock.Nonce)
+		fmt.Printf("\tTxs %+v\n", curBlock.Txs)
+
+		for _, tx := range curBlock.Txs {
+			fmt.Printf("\t\ttx-hash :%x \n", tx.TxHash)
+			fmt.Printf("\t\t 输入。。。\n")
+			for _, vin := range tx.Vins {
+				fmt.Printf("\t\t\tvin-hash :%x \n", vin.TxHash)
+				fmt.Printf("\t\t\tvin-vout:%x \n", vin.Vout)
+				fmt.Printf("\t\t\tvin-ScriptSig:%s \n", vin.ScriptSig)
+			}
+			fmt.Printf("\t\t 输出。。。\n")
+			for _, vout := range tx.Vouts {
+				fmt.Printf("\t\t\tvout-Value :%v \n", vout.Value)
+				fmt.Printf("\t\t\tvout-ScriptPublicKey:%s \n", vout.ScriptPublicKey)
+			}
+		}
 		// 退出条件
 		// 创世区块 preHash = nil
 		var hashInt big.Int
@@ -195,10 +212,15 @@ func NewBlockChain() *BlockChain {
 }
 
 //实现挖矿功能
-func (bc *BlockChain) MineNewBlock() {
+func (bc *BlockChain) MineNewBlock(from, to, amount []string) {
 	var block *Block
 	// 搁置交易生成步骤
 	var txs []*Transaction
+	value, _ := strconv.Atoi(amount[0])
+	// 生成新的交易
+	tx := NewSimpleTransaction(from[0], to[0], value)
+	// 追加到交易列表中
+	txs = append(txs, tx)
 	// 从数据库中获取最新区块
 	bc.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockTableName))
@@ -230,4 +252,119 @@ func (bc *BlockChain) MineNewBlock() {
 		}
 		return nil
 	})
+}
+
+// UnUTXOS
+/*
+	1. 遍历查找区块链中每个区块的每笔交易
+	2. 找出每笔交易的所有输出
+	3. 判断每个输出是否满足
+		1. 属于传入的地址
+		2. 是否未被花费
+			1. 遍历区块链数据将所有已花费的OUTPUT存入一个缓存
+			2. 再次遍历将区块链数据，检查每个vout是否包含在前面的已花费输出中
+*/
+func (bc *BlockChain) UnUTXOS(address string) []*UTXO {
+	// 1.遍历数据库，查找所有与address相关的交易
+	// 获取迭代器
+	bcit := bc.Iterator()
+	// 当前地址未花费输出列表
+	var unUTXOS []*UTXO
+	// 获取指定地址所有已花费输出
+	spentOutputs := bc.SpentOutputs(address)
+
+	// 迭代，获取下一个区块
+	for {
+		block := bcit.Next()
+		for _, tx := range block.Txs {
+			//跳转
+		work:
+			// 所有输出
+			for index, vout := range tx.Vouts {
+				// index : 当前输出在当前交易中的索引位置
+				// vout : 当前输出
+				if vout.CheckPubKeyWithAddress(address) {
+					// 当前vout 属于传入的地址
+					if len(spentOutputs) != 0 {
+						var isSpentOut bool
+						for txHash, indexArray := range spentOutputs {
+							for _, i := range indexArray {
+								// txHash ： 当前输出所引用的交易哈希
+								// indexArray: 哈希关联的vout索引列表
+								if txHash == hex.EncodeToString(tx.TxHash) && index == i {
+									// 说明当前的交易tx至少已经有输出被其他交易的输入引用
+									// index == i 说明当前的输出被其他交易引用
+									// 跳转到最外层循环，判断下一个VOUT
+									isSpentOut = true
+									continue work
+								}
+							}
+						}
+						if !isSpentOut == false {
+							utxo := &UTXO{
+								tx.TxHash, index, vout,
+							}
+							unUTXOS = append(unUTXOS, utxo)
+						}
+					} else {
+						// 将当前地址所有输出都添加都未花费输出中
+						utxo := &UTXO{
+							tx.TxHash, index, vout,
+						}
+						unUTXOS = append(unUTXOS, utxo)
+					}
+					return unUTXOS
+				}
+			}
+		}
+		// 退出循环条件
+		var hashInt big.Int
+		hashInt.SetBytes(block.PreBlockHash)
+		if hashInt.Cmp(big.NewInt(0)) == 0 {
+			break
+		}
+	}
+
+	return nil
+}
+
+// SpentOutputs 获取指定地址所有已花费输出
+func (bc *BlockChain) SpentOutputs(address string) map[string][]int {
+	//已花费输出缓存
+	spentTxoutputs := make(map[string][]int)
+	// 获取迭代器对象
+	bcit := bc.Iterator()
+	for {
+		block := bcit.Next()
+		for _, tx := range block.Txs {
+			// 排除coinbase交易
+			if !tx.IsCoinbaseTransaction() {
+				for _, vin := range tx.Vins {
+					if vin.CheckPubKeyWithAddress(address) {
+						key := hex.EncodeToString(vin.TxHash)
+						// 添加到已花费输出
+						spentTxoutputs[key] = append(spentTxoutputs[key], vin.Vout)
+					}
+				}
+			}
+		}
+		// 退出循环条件
+		var hashInt big.Int
+		hashInt.SetBytes(block.PreBlockHash)
+		if hashInt.Cmp(big.NewInt(0)) == 0 {
+			break
+		}
+	}
+	return spentTxoutputs
+}
+
+// 查询余额函数
+
+func (bc *BlockChain) getBalance(address string) int {
+	var amount int
+	utxox := bc.UnUTXOS(address)
+	for _, output := range utxox {
+		amount += output.Output.Value
+	}
+	return amount
 }

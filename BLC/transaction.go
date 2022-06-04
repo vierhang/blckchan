@@ -28,7 +28,7 @@ func NewCoinBaseTransaction(address string) *Transaction {
 		[]byte{}, -1, "system reward",
 	}
 	txOutput := &TxOutput{
-		value:           10,
+		Value:           10,
 		ScriptPublicKey: address,
 	}
 	// 输入输出组装交易
@@ -52,4 +52,40 @@ func (tx *Transaction) HashTransaction() {
 	// 生成哈希
 	hash := sha256.Sum256(result.Bytes())
 	tx.TxHash = hash[:]
+}
+
+// NewSimpleTransaction 生成普通交易转账
+func NewSimpleTransaction(from, to string, amount int) *Transaction {
+	var txInputs []*TxInput
+	var txOutputs []*TxOutput
+	// 输入
+	txInput := &TxInput{[]byte(":315ba68f58dd915c847a93b5339d6d0f3e177845e7e7abc9ee53472214a07916"), 0, from}
+	txInputs = append(txInputs, txInput)
+	//输出(转账源)
+	txOutput := &TxOutput{
+		Value:           amount,
+		ScriptPublicKey: to,
+	}
+	//txOutput := &TxOutput{}
+	txOutputs = append(txOutputs, txOutput)
+	// 找零
+	if amount < 10 {
+		txOutPut := &TxOutput{
+			Value:           10 - amount,
+			ScriptPublicKey: from,
+		}
+		txOutputs = append(txOutputs, txOutPut)
+	}
+	tx := Transaction{
+		TxHash: nil,
+		Vins:   txInputs,
+		Vouts:  txOutputs,
+	}
+	tx.HashTransaction()
+	return &tx
+}
+
+// IsCoinbaseTransaction 判读交易是否是一个coinbase交易
+func (tx *Transaction) IsCoinbaseTransaction() bool {
+	return tx.Vins[0].Vout == -1 && len(tx.Vins[0].TxHash) == 0
 }

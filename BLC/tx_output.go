@@ -1,6 +1,11 @@
 package BLC
 
 type TxOutput struct {
-	value           int    //金额
+	Value           int    //金额
 	ScriptPublicKey string //UTXO所有者
+}
+
+// CheckPubKeyWithAddress 验证当前UTXO是否属于指定的地址
+func (otx *TxOutput) CheckPubKeyWithAddress(address string) bool {
+	return address == otx.ScriptPublicKey
 }

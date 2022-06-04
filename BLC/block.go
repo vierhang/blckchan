@@ -83,11 +83,11 @@ func DeSerializeBlock(blockBytes []byte) *Block {
 	return block
 }
 
-// 把指定区块中所有交易结构序列化
-func (block *Block) HashTransaction() []byte {
+// HashTransaction 把指定区块中所有交易结构序列化(类Merkle的哈希计算方法)
+func (b *Block) HashTransaction() []byte {
 	var txHashes [][]byte
 	//将指定区块中的所有交易哈希进行拼接
-	for _, tx := range block.Txs {
+	for _, tx := range b.Txs {
 		txHashes = append(txHashes, tx.TxHash)
 	}
 	txHash := sha256.Sum256(bytes.Join(txHashes, []byte{}))

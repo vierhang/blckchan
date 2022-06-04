@@ -34,7 +34,7 @@ func dbExists() bool {
 }
 
 // 初始化区块链
-func CreateBlockChainWithGenesisBLock() *BlockChain {
+func CreateBlockChainWithGenesisBLock(txs []*Transaction) *BlockChain {
 	if dbExists() {
 		// 文件存在，说明创世区块存在
 		fmt.Println("创世区块已存在。。。")
@@ -55,7 +55,7 @@ func CreateBlockChainWithGenesisBLock() *BlockChain {
 			if err != nil {
 				log.Panicf("CreateBucket DB error [%+v] ", err)
 			}
-			genesisBlock := CreateGenesisBlock([]byte("this is first block"))
+			genesisBlock := CreateGenesisBlock(txs)
 			// 存储
 			err = b.Put(genesisBlock.Hash, genesisBlock.SerializeBlock())
 			if err != nil {
@@ -74,7 +74,7 @@ func CreateBlockChainWithGenesisBLock() *BlockChain {
 }
 
 // AddBlock 添加区块到区块链中
-func (bc *BlockChain) AddBlock(data []byte) {
+func (bc *BlockChain) AddBlock(txs []*Transaction) {
 	// 插入数据
 	err := bc.DB.Update(func(tx *bolt.Tx) error {
 		// 获取数据库实例
@@ -86,7 +86,7 @@ func (bc *BlockChain) AddBlock(data []byte) {
 			latestBlockBytes := b.Get(latestBlockHash)
 			// 反序列化区块数据
 			latestBlock := DeSerializeBlock(latestBlockBytes)
-			newBlock := NewBlock(latestBlock.Height+1, latestBlock.Hash, data)
+			newBlock := NewBlock(latestBlock.Height+1, latestBlock.Hash, txs)
 			// 存入数据库
 			err := b.Put(newBlock.Hash, newBlock.SerializeBlock())
 			if err != nil {
@@ -117,7 +117,7 @@ func (bc *BlockChain) PrintChan() {
 		fmt.Printf("\tHash %x\n", curBlock.Hash)
 		fmt.Printf("\tPreBlockHash %x\n", curBlock.PreBlockHash)
 		fmt.Printf("\tTimeStamp %v\n", curBlock.TimeStamp)
-		fmt.Printf("\tData %s\n", curBlock.Data)
+		fmt.Printf("\tTxs %s\n", curBlock.Txs)
 		fmt.Printf("\tHeight %d\n", curBlock.Height)
 		fmt.Printf("\tNonce %d\n", curBlock.Nonce)
 		// 退出条件
@@ -131,6 +131,7 @@ func (bc *BlockChain) PrintChan() {
 	}
 }
 
+/*
 // PrintChan2 遍历数据库、输出所有区块数据
 func (bc *BlockChain) PrintChan2() {
 	fmt.Println("打印区块链完整信息")
@@ -166,6 +167,8 @@ func (bc *BlockChain) PrintChan2() {
 		currentHash = curBlock.PreBlockHash
 	}
 }
+
+*/
 
 func NewBlockChain() *BlockChain {
 	db, err := bolt.Open(DBName, 0600, nil)

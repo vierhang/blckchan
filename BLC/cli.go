@@ -22,17 +22,17 @@ func PrintUsage() {
 }
 
 //初始化区块链
-func (c *CLI) CreateBlockChain() {
-	CreateBlockChainWithGenesisBLock()
+func (c *CLI) CreateBlockChain(txs []*Transaction) {
+	CreateBlockChainWithGenesisBLock(txs)
 }
 
 //添加区块
-func (c *CLI) AddBlock(data string) {
+func (c *CLI) AddBlock(txs []*Transaction) {
 	if !dbExists() {
 		fmt.Println("dbExists")
 		os.Exit(1)
 	}
-	NewBlockChain().AddBlock([]byte(data))
+	NewBlockChain().AddBlock(txs)
 }
 
 //打印完整区块链信息
@@ -91,7 +91,7 @@ func (c *CLI) Run() {
 			PrintUsage()
 			os.Exit(1)
 		}
-		c.AddBlock(*flagAddBlockArg)
+		c.AddBlock([]*Transaction{})
 	}
 	// 输出区块信息
 	if printChainCmd.Parsed() {
@@ -99,6 +99,6 @@ func (c *CLI) Run() {
 	}
 	// 创建区块链命令
 	if createBLCWithGenesisBlockCmd.Parsed() {
-		c.CreateBlockChain()
+		c.CreateBlockChain([]*Transaction{})
 	}
 }

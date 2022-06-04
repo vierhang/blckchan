@@ -193,3 +193,41 @@ func NewBlockChain() *BlockChain {
 		db, tip,
 	}
 }
+
+//实现挖矿功能
+func (bc *BlockChain) MineNewBlock() {
+	var block *Block
+	// 搁置交易生成步骤
+	var txs []*Transaction
+	// 从数据库中获取最新区块
+	bc.DB.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(BlockTableName))
+		if b != nil {
+			// 获取最新区块哈希值
+			hash := b.Get([]byte("1"))
+			// 获取最新区块
+			blockBytes := b.Get(hash)
+			// 反序列化
+			block = DeSerializeBlock(blockBytes)
+		}
+		return nil
+	})
+	// 通过最新区块生成新区块
+	block = NewBlock(block.Height+1, block.Hash, txs)
+	// 持久化
+	bc.DB.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(BlockTableName))
+		if b != nil {
+			err := b.Put(block.Hash, block.SerializeBlock())
+			if err != nil {
+				log.Panicf("update the new block to db failed! %v", err)
+			}
+			err = b.Put([]byte("1"), block.Hash)
+			if err != nil {
+				log.Panicf("update the latest block hash to db failed! %v", err)
+			}
+			bc.Tip = block.Hash
+		}
+		return nil
+	})
+}

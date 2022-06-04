@@ -19,9 +19,27 @@ func PrintUsage() {
 	fmt.Printf("\taddblock -data DATA --添加区块\n")
 	// 打印完整区块信息
 	fmt.Printf("\tprintchain --输出区块链信息\n")
+	// 通过命令行转账
+	fmt.Printf("\t-from FROM -to TO -amount AMOUNT --发起转账\n")
+	fmt.Printf("\t转账参数说明\n")
+	fmt.Printf("\t\t-from FROM -- 转账原地址\n")
+	fmt.Printf("\t\t-to TO -- 转账目标地址\n")
+	fmt.Printf("\t\t-amount AMOUNT -- 转账金额\n")
 }
 
-//初始化区块链
+// 发起交易
+func (c *CLI) send() {
+	if !dbExists() {
+		fmt.Println("数据库不存在")
+		os.Exit(1)
+	}
+	// 获取区块链对象
+	blockchainObj := NewBlockChain()
+	defer blockchainObj.DB.Close()
+	blockchainObj.MineNewBlock()
+}
+
+// CreateBlockChain 初始化区块链
 func (c *CLI) CreateBlockChain(address string) {
 	CreateBlockChainWithGenesisBLock(address)
 }
@@ -35,7 +53,7 @@ func (c *CLI) AddBlock(txs []*Transaction) {
 	NewBlockChain().AddBlock(txs)
 }
 
-//打印完整区块链信息
+// PrintChain 打印完整区块链信息
 func (c *CLI) PrintChain() {
 	if !dbExists() {
 		fmt.Println("dbExists")
@@ -62,12 +80,27 @@ func (c *CLI) Run() {
 	printChainCmd := flag.NewFlagSet("printchain", flag.ExitOnError)
 	createBLCWithGenesisBlockCmd := flag.NewFlagSet("cerateblockchain", flag.ExitOnError)
 
+	//发起交易
+	// bcli send -from "[\"test\"]" -to "[\"b\"]" -amount "[\"20\"]"
+	sendCmd := flag.NewFlagSet("send", flag.ExitOnError)
+
 	// 数据参数处理
 	flagAddBlockArg := addBlockCmd.String("data", "sent 100 btc to player", "添加区块数据")
 	// 创建区块时指定的矿工地址
 	flagCreageBlockchainArg := createBLCWithGenesisBlockCmd.String("address", "weihang", "指定接受系统奖励的矿工地址")
+
+	//发起交易参数
+	flagSendFromArg := sendCmd.String("from", "", "转账原地址")
+	flagSendToArg := sendCmd.String("to", "", "转账目标地址")
+	flagSendAmountArg := sendCmd.String("amount", "", "转账金额")
+
 	// 判断命令
 	switch os.Args[1] {
+	case "send":
+		if err := sendCmd.Parse(os.Args[2:]); err != nil {
+			log.Panicf("parse sendCmd failed ! %v\n", err)
+		}
+
 	case "addblock":
 		if err := addBlockCmd.Parse(os.Args[2:]); err != nil {
 			log.Panicf("parse addBlockCmd err %v \n", err)
@@ -85,6 +118,27 @@ func (c *CLI) Run() {
 		fmt.Println(os.Args[1])
 		fmt.Println("os.Args[1] switch error")
 		os.Exit(1)
+	}
+	// 发起转账
+	if sendCmd.Parsed() {
+		if *flagSendFromArg == "" {
+			fmt.Println("原地址不能为空")
+			PrintUsage()
+			os.Exit(1)
+		}
+		if *flagSendToArg == "" {
+			fmt.Println("目标地址不能为空")
+			PrintUsage()
+			os.Exit(1)
+		}
+		if *flagSendAmountArg == "" {
+			fmt.Println("转账金额不能为空")
+			PrintUsage()
+			os.Exit(1)
+		}
+		fmt.Printf("\tFROM:[%s]\n", JSONToSlice(*flagSendFromArg))
+		fmt.Printf("\tTO:[%s]\n", JSONToSlice(*flagSendToArg))
+		fmt.Printf("\tAMOUNT:[%s]\n", JSONToSlice(*flagSendAmountArg))
 	}
 	// 添加区块命令
 	if addBlockCmd.Parsed() {

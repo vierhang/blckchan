@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"log"
+	"os"
 )
 
 // IntToHex 实现int64 -> []byte
@@ -24,4 +26,13 @@ func JSONToSlice(jsonString string) []string {
 		log.Panicf("json to []string failed! %v\n", err)
 	}
 	return strSlice
+}
+
+// IsValidArgs 参数数量检测函数
+func IsValidArgs() {
+	if len(os.Args) < 2 {
+		PrintUsage()
+		fmt.Println("os.Args < 2")
+		os.Exit(1)
+	}
 }

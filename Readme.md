@@ -57,3 +57,7 @@
         3. 方式
     3. 编码实现
         1. 比特币地址前缀
+
+
+多笔交易json  JSONToArray
+bcli send -from "[\"test\"]" -to "[\"b\"]" -amount "[\"20\"]"

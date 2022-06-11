@@ -216,11 +216,14 @@ func (bc *BlockChain) MineNewBlock(from, to, amount []string) {
 	var block *Block
 	// 搁置交易生成步骤
 	var txs []*Transaction
-	value, _ := strconv.Atoi(amount[0])
-	// 生成新的交易
-	tx := NewSimpleTransaction(from[0], to[0], value)
-	// 追加到交易列表中
-	txs = append(txs, tx)
+	// 遍历交易的参与者
+	for index, address := range from {
+		value, _ := strconv.Atoi(amount[index])
+		// 生成新的交易
+		tx := NewSimpleTransaction(address, to[index], value, bc, txs)
+		// 追加到交易列表中
+		txs = append(txs, tx)
+	}
 	// 从数据库中获取最新区块
 	bc.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockTableName))
@@ -264,16 +267,73 @@ func (bc *BlockChain) MineNewBlock(from, to, amount []string) {
 			1. 遍历区块链数据将所有已花费的OUTPUT存入一个缓存
 			2. 再次遍历将区块链数据，检查每个vout是否包含在前面的已花费输出中
 */
-func (bc *BlockChain) UnUTXOS(address string) []*UTXO {
-	// 1.遍历数据库，查找所有与address相关的交易
+func (bc *BlockChain) UnUTXOS(address string, txs []*Transaction) []*UTXO {
+	// 1. 遍历数据库，查找所有与address相关的交易
 	// 获取迭代器
 	bcit := bc.Iterator()
-	// 当前地址未花费输出列表
+	// 当前地址的未花费输出列表
 	var unUTXOS []*UTXO
 	// 获取指定地址所有已花费输出
-	spentOutputs := bc.SpentOutputs(address)
+	spentTXOutputs := bc.SpentOutputs(address)
+	// 缓存迭代
+	// 查找缓存中的已花费输出
+	for _, tx := range txs {
+		// 判断coinbaseTransaction
+		if !tx.IsCoinbaseTransaction() {
+			for _, in := range tx.Vins {
+				// 判断用户
+				if in.CheckPubKeyWithAddress(address) {
+					// 添加到已花费输出的map中
+					key := hex.EncodeToString(in.TxHash)
+					spentTXOutputs[key] = append(spentTXOutputs[key], in.Vout)
+				}
+			}
+		}
+	}
+	// 遍历缓存中的UTXO
+	for _, tx := range txs {
+		// 添加一个缓存输出的跳转
+	WorkCacheTx:
+		for index, vout := range tx.Vouts {
+			if vout.CheckPubKeyWithAddress(address) {
+				if len(spentTXOutputs) != 0 {
+					var isUtxoTx bool // 判断交易是否被其它交易引用
+					for txHash, indexArray := range spentTXOutputs {
+						txHashStr := hex.EncodeToString(tx.TxHash)
+						if txHash == txHashStr {
+							// 当前遍历到的交易已经有输出被其它交易的输入所引用
+							isUtxoTx = true
+							// 添加状态变量，判断指定的output是否被引用
+							var isSpentUTXO bool
+							for _, voutIndex := range indexArray {
+								if index == voutIndex {
+									// 该输出被引用
+									isSpentUTXO = true
+									// 跳出当前vout判断逻辑，进行下一个输出判断
+									continue WorkCacheTx
+								}
+							}
+							if isSpentUTXO == false {
+								utxo := &UTXO{tx.TxHash, index, vout}
+								unUTXOS = append(unUTXOS, utxo)
+							}
+						}
+					}
+					if isUtxoTx == false {
+						// 说明当前交易中所有与address相关的outputs都是UTXO
+						utxo := &UTXO{tx.TxHash, index, vout}
+						unUTXOS = append(unUTXOS, utxo)
+					}
+				} else {
+					utxo := &UTXO{tx.TxHash, index, vout}
+					unUTXOS = append(unUTXOS, utxo)
+				}
+			}
+		}
+	}
 
-	// 迭代，获取下一个区块
+	// 有限遍历缓存中的UTXO，如果余额不足，再遍历DB
+	// 数据库迭代，获取下一个区块
 	for {
 		block := bcit.Next()
 		for _, tx := range block.Txs {
@@ -285,9 +345,9 @@ func (bc *BlockChain) UnUTXOS(address string) []*UTXO {
 				// vout : 当前输出
 				if vout.CheckPubKeyWithAddress(address) {
 					// 当前vout 属于传入的地址
-					if len(spentOutputs) != 0 {
+					if len(spentTXOutputs) != 0 {
 						var isSpentOut bool
-						for txHash, indexArray := range spentOutputs {
+						for txHash, indexArray := range spentTXOutputs {
 							for _, i := range indexArray {
 								// txHash ： 当前输出所引用的交易哈希
 								// indexArray: 哈希关联的vout索引列表
@@ -300,7 +360,7 @@ func (bc *BlockChain) UnUTXOS(address string) []*UTXO {
 								}
 							}
 						}
-						if !isSpentOut == false {
+						if !isSpentOut {
 							utxo := &UTXO{
 								tx.TxHash, index, vout,
 							}
@@ -325,7 +385,7 @@ func (bc *BlockChain) UnUTXOS(address string) []*UTXO {
 		}
 	}
 
-	return nil
+	return unUTXOS
 }
 
 // SpentOutputs 获取指定地址所有已花费输出
@@ -362,9 +422,35 @@ func (bc *BlockChain) SpentOutputs(address string) map[string][]int {
 
 func (bc *BlockChain) getBalance(address string) int {
 	var amount int
-	utxox := bc.UnUTXOS(address)
+	utxox := bc.UnUTXOS(address, []*Transaction{})
 	for _, output := range utxox {
 		amount += output.Output.Value
 	}
 	return amount
+}
+
+// FindSpendableUTXO 查找指定地址的可用UTXO，超过amount就中断查找
+// 更新当前数据库中指定地址的UTXO数量
+// txs：缓存中的交易列表，用于多笔交易处理
+func (bc *BlockChain) FindSpendableUTXO(from string, amount int, txs []*Transaction) (int, map[string][]int) {
+	// 可用的UTXO
+	spendableUTXO := make(map[string][]int)
+
+	var value int
+	utxos := bc.UnUTXOS(from, txs)
+	fmt.Println("UnUTXOS")
+	fmt.Println(utxos)
+	for _, utxo := range utxos {
+		value += utxo.Output.Value
+		// 计算交易哈希
+		hash := hex.EncodeToString(utxo.TxHash)
+		spendableUTXO[hash] = append(spendableUTXO[hash], utxo.Index)
+		if value >= amount {
+			break
+		}
+	}
+	if value < amount {
+		fmt.Printf("地址【%s】余额不足，当前余额为【%d】,转账金额为【%d】\n", from, value, amount)
+	}
+	return value, spendableUTXO
 }

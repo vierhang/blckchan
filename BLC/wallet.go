@@ -1,11 +1,12 @@
 package BLC
 
 import (
-	"crypto"
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"golang.org/x/crypto/ripemd160"
 	"log"
 )
 
@@ -47,7 +48,7 @@ func Ripemd160Hash(pubKey []byte) []byte {
 	hash256.Write(pubKey)
 	hash := hash256.Sum(nil)
 	// ripemd160
-	rmd160 := crypto.RIPEMD160.New()
+	rmd160 := ripemd160.New()
 	rmd160.Write(hash)
 	return rmd160.Sum(nil)
 }
@@ -70,4 +71,21 @@ func (w *Wallet) GetAddress() []byte {
 	// base58
 	ba25Bytes := Base58Encode(addressBytes)
 	return ba25Bytes
+}
+
+// IsValidForAddress 判断地址有效性
+func IsValidForAddress(addressBytes []byte) bool {
+	// 1. 地址通过base58Decode进行解码  (长度24)
+	pubKeyCheckSumBytes := Base58Decode(addressBytes)
+	// 2.拆分地址，进行校验和校验
+	checkSumBytes := pubKeyCheckSumBytes[len(pubKeyCheckSumBytes)-addressCheckSumLen:]
+	// 传入ripemdhash160，生成校验和
+	ripemd160Hash := pubKeyCheckSumBytes[:len(pubKeyCheckSumBytes)-addressCheckSumLen]
+	// 3. 生成
+	checkBytes := CheckSum(ripemd160Hash)
+	// 4. 比较 校验和
+	if bytes.Compare(checkBytes, checkSumBytes) == 0 {
+		return true
+	}
+	return false
 }

@@ -53,6 +53,12 @@ func (c *CLI) Run() {
 	// 查询余额命令
 	getBalanceCmd := flag.NewFlagSet("getbalance", flag.ExitOnError)
 
+	// 钱包管理相关命令
+	// 创建钱包集合
+	createWalletCmd := flag.NewFlagSet("createwallet", flag.ExitOnError)
+	// 获取地址列表
+	getAccountsCmd := flag.NewFlagSet("accounts", flag.ExitOnError)
+
 	//发起交易
 	// bcli send -from "[\"test\"]" -to "[\"b\"]" -amount "[\"20\"]"
 	// bcli send -from "[\"weihang\",\"b\"]" -to "[\"c\",\"d\"]" -amount "[\"2\",\"1\"]"
@@ -71,6 +77,14 @@ func (c *CLI) Run() {
 	flagGetBalanceArg := getBalanceCmd.String("address", "", "要查询余额的地址")
 	// 判断命令
 	switch os.Args[1] {
+	case "accounts":
+		if err := getAccountsCmd.Parse(os.Args[2:]); nil != err {
+			log.Panicf("parse cmd get accounts failed! %v\n", err)
+		}
+	case "createwallet":
+		if err := createWalletCmd.Parse(os.Args[2:]); nil != err {
+			log.Panicf("parse cmd create wallet failed! %v\n", err)
+		}
 	case "getbalance":
 		if err := getBalanceCmd.Parse(os.Args[2:]); err != nil {
 			log.Panicf("parse getbalance failed ! %v\n", err)
@@ -97,6 +111,16 @@ func (c *CLI) Run() {
 		fmt.Println(os.Args[1])
 		fmt.Println("os.Args[1] switch error")
 		os.Exit(1)
+	}
+
+	// 获取地址列表
+	if getAccountsCmd.Parsed() {
+		c.GetAccounts()
+	}
+
+	// 创建钱包
+	if createWalletCmd.Parsed() {
+		c.CreateWallets()
 	}
 	// 查询余额
 	if getBalanceCmd.Parsed() {

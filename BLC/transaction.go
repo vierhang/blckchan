@@ -27,12 +27,9 @@ func NewCoinBaseTransaction(address string) *Transaction {
 	//Vout : -1 (为了对是否coinbase进行判断)
 	// ScriptSig 系统奖励
 	txInput := &TxInput{
-		[]byte{}, -1, "system reward",
+		[]byte{}, -1, nil, nil,
 	}
-	txOutput := &TxOutput{
-		Value:           10,
-		ScriptPublicKey: address,
-	}
+	txOutput := NewTxOutput(10, address)
 	// 输入输出组装交易
 	txCoinbase := &Transaction{
 		TxHash: nil,
@@ -63,6 +60,10 @@ func NewSimpleTransaction(from, to string, amount int, bc *BlockChain, txs []*Tr
 	// 调用可花费UTXO函数
 	money, spendableUTXO := bc.FindSpendableUTXO(from, amount, txs)
 	fmt.Println("money , spendableUTXO", money, spendableUTXO)
+	// 获取钱包集合对象
+	wallets := NewWallets()
+	// 查找对应的钱包结构
+	wallet := wallets.WalletList[from]
 	// 输入
 	for txHash, indexArray := range spendableUTXO {
 		txHashBytes, err := hex.DecodeString(txHash)
@@ -74,28 +75,21 @@ func NewSimpleTransaction(from, to string, amount int, bc *BlockChain, txs []*Tr
 			txInput := &TxInput{
 				TxHash:    txHashBytes,
 				Vout:      index,
-				ScriptSig: from,
+				Signature: nil,
+				PublicKey: wallet.PublicKey,
 			}
 			txInputs = append(txInputs, txInput)
 		}
 	}
-	//txInput := &TxInput{[]byte(":315ba68f58dd915c847a93b5339d6d0f3e177845e7e7abc9ee53472214a07916"), 0, from}
-	//txInputs = append(txInputs, txInput)
 	//输出(转账源)
-	txOutput := &TxOutput{
-		Value:           amount,
-		ScriptPublicKey: to,
-	}
+	txOutput := NewTxOutput(amount, to)
 	txOutputs = append(txOutputs, txOutput)
 	// 找零
 	fmt.Println(money, amount)
 	if money < amount {
 		log.Panicf("余额不足..\n")
 	}
-	txOutPut := &TxOutput{
-		Value:           money - amount,
-		ScriptPublicKey: from,
-	}
+	txOutPut := NewTxOutput(money-amount, from)
 	txOutputs = append(txOutputs, txOutPut)
 	tx := Transaction{
 		TxHash: nil,

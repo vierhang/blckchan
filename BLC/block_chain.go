@@ -132,12 +132,13 @@ func (bc *BlockChain) PrintChan() {
 			for _, vin := range tx.Vins {
 				fmt.Printf("\t\t\tvin-hash :%x \n", vin.TxHash)
 				fmt.Printf("\t\t\tvin-vout:%x \n", vin.Vout)
-				fmt.Printf("\t\t\tvin-ScriptSig:%s \n", vin.ScriptSig)
+				fmt.Printf("\t\t\tvin-PublicKey:%x \n", vin.PublicKey)
+				fmt.Printf("\t\t\tvin-Signature:%x \n", vin.Signature)
 			}
 			fmt.Printf("\t\t 输出。。。\n")
 			for _, vout := range tx.Vouts {
 				fmt.Printf("\t\t\tvout-Value :%v \n", vout.Value)
-				fmt.Printf("\t\t\tvout-ScriptPublicKey:%s \n", vout.ScriptPublicKey)
+				fmt.Printf("\t\t\tvout-Ripemd160Hash:%x \n", vout.Ripemd160Hash)
 			}
 		}
 		// 退出条件
@@ -281,8 +282,9 @@ func (bc *BlockChain) UnUTXOS(address string, txs []*Transaction) []*UTXO {
 		// 判断coinbaseTransaction
 		if !tx.IsCoinbaseTransaction() {
 			for _, in := range tx.Vins {
+
 				// 判断用户
-				if in.CheckPubKeyWithAddress(address) {
+				if in.UnLockRipemd160Hash(String2Hash160(address)) {
 					// 添加到已花费输出的map中
 					key := hex.EncodeToString(in.TxHash)
 					spentTXOutputs[key] = append(spentTXOutputs[key], in.Vout)
@@ -295,7 +297,7 @@ func (bc *BlockChain) UnUTXOS(address string, txs []*Transaction) []*UTXO {
 		// 添加一个缓存输出的跳转
 	WorkCacheTx:
 		for index, vout := range tx.Vouts {
-			if vout.CheckPubKeyWithAddress(address) {
+			if vout.UnLockScriptPubKeyWithAddress(address) {
 				if len(spentTXOutputs) != 0 {
 					var isUtxoTx bool // 判断交易是否被其它交易引用
 					for txHash, indexArray := range spentTXOutputs {
@@ -343,7 +345,7 @@ func (bc *BlockChain) UnUTXOS(address string, txs []*Transaction) []*UTXO {
 			for index, vout := range tx.Vouts {
 				// index : 当前输出在当前交易中的索引位置
 				// vout : 当前输出
-				if vout.CheckPubKeyWithAddress(address) {
+				if vout.UnLockScriptPubKeyWithAddress(address) {
 					// 当前vout 属于传入的地址
 					if len(spentTXOutputs) != 0 {
 						var isSpentOut bool
@@ -400,7 +402,7 @@ func (bc *BlockChain) SpentOutputs(address string) map[string][]int {
 			// 排除coinbase交易
 			if !tx.IsCoinbaseTransaction() {
 				for _, vin := range tx.Vins {
-					if vin.CheckPubKeyWithAddress(address) {
+					if vin.UnLockRipemd160Hash(String2Hash160(address)) {
 						key := hex.EncodeToString(vin.TxHash)
 						// 添加到已花费输出
 						spentTxoutputs[key] = append(spentTxoutputs[key], vin.Vout)
